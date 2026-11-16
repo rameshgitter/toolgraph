@@ -18,6 +18,7 @@ import experiment as ex
 HERE = os.path.dirname(os.path.abspath(__file__))
 WRITE_LOCK = threading.Lock()
 STATE = {"history": [], "rnd": random.Random(7), "trained": 0}
+READY = threading.Event()   # set once HydraDB is reachable, seeded and scored
 TEST = ex.make_test_set()
 
 
@@ -42,11 +43,13 @@ def snapshot():
 
 
 def init_graph(force=False):
+    READY.clear()
     wait_for_hydradb()
     if force or tg.catalog_stats()["tools"] == 0:
         tg.seed(1)
     STATE["history"], STATE["trained"], STATE["rnd"] = [], 0, random.Random(7)
     snapshot()
+    READY.set()
 
 
 def public(ctx):
@@ -76,8 +79,13 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _starting(self):
+        self._send(503, {"error": "starting", "message": "HydraDB is starting and the graph is being seeded"})
+
     def do_GET(self):
         p = self.path.split("?")[0]
+        if p.startswith("/api/") and p != "/api/curve" and not READY.is_set():
+            return self._starting()
         try:
             if p in ("/", "/index.html"):
                 return self._send(200, open(os.path.join(HERE, "static", "index.html"), "rb").read(), "text/html; charset=utf-8")
@@ -98,6 +106,8 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path != "/api/reset" and not READY.is_set():
+            return self._starting()
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}")
@@ -142,8 +152,9 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8080)))
     ap.add_argument("--host", default="0.0.0.0")
     a = ap.parse_args()
-    init_graph(force=os.environ.get("KEEP_GRAPH") != "1")   # fresh, unlearned graph on every boot
-    print(f"ToolGraph on http://{a.host}:{a.port}  (HydraDB {tg.HOST})", flush=True)
+    # Open the port at once (hosts check it), and seed the graph in the background.
+    threading.Thread(target=lambda: init_graph(force=os.environ.get("KEEP_GRAPH") != "1"), daemon=True).start()
+    print(f"ToolGraph on http://{a.host}:{a.port}  (HydraDB {tg.HOST}); seeding in background", flush=True)
     ThreadingHTTPServer((a.host, a.port), H).serve_forever()
 
 
