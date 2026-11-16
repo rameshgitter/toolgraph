@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ToolGraph</title>
+<style>
+:root{
+  --bg:#fbfaf7; --card:#ffffff; --ink:#15140f; --ink2:#5b594f; --line:#e7e4da; --accent:#2a78d6;
+  --action:#2a78d6; --dep:#c98500; --res:#6250d6; --good:#0a7a4a; --bad:#c23a38; --chip:#f2efe6;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141413; --card:#1c1c1a; --ink:#f0efec; --ink2:#a9a79c; --line:#2f2e2a; --accent:#3987e5;
+  --action:#3987e5; --dep:#e0a21b; --res:#9085e9; --good:#3cc88a; --bad:#e66767; --chip:#262522;}}
+:root[data-theme="dark"]{
+  --bg:#141413; --card:#1c1c1a; --ink:#f0efec; --ink2:#a9a79c; --line:#2f2e2a; --accent:#3987e5;
+  --action:#3987e5; --dep:#e0a21b; --res:#9085e9; --good:#3cc88a; --bad:#e66767; --chip:#262522;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 64px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--ink2);margin:0 0 22px;max-width:760px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink2);margin:0 0 10px;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat b{display:block;font-size:22px;letter-spacing:-.01em}
+.stat span{color:var(--ink2);font-size:12.5px}
+.row{display:flex;gap:8px}
+input[type=text]{flex:1;min-width:0;padding:11px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+button{padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:inherit;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:wait}
+.ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ex button{font-size:12.5px;padding:5px 10px;border-radius:999px}
+.tag{display:inline-block;padding:3px 9px;border-radius:6px;font-size:12.5px;margin:0 6px 6px 0;border:1px solid var(--line);background:var(--chip)}
+.tag i{font-style:normal;color:var(--ink2);margin-left:6px}
+.k-action{border-left:3px solid var(--action)} .k-dependency{border-left:3px solid var(--dep)} .k-resolver{border-left:3px solid var(--res)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.edge{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;padding:3px 0;color:var(--ink2)}
+.edge b{color:var(--ink);font-weight:600}
+.edge u{text-decoration:none;color:var(--accent);padding:0 6px}
+.edge .NEEDS{color:var(--dep)}
+.big{font-size:15px}
+.good{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
+.muted{color:var(--ink2);font-size:13px}
+label.chk{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:14px}
+select{padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+svg text{fill:var(--ink2);font-size:11px}
+.legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink2);margin-top:6px}
+.legend span:before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle;background:var(--c)}
+img.curve{width:100%;border-radius:8px;border:1px solid var(--line);background:#fcfcfb}
+@media(max-width:760px){.stats{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ToolGraph</h1>
+  <p class="sub">A context layer for agents, stored in a HydraDB graph. Instead of loading every tool into the window, the agent walks the graph and pulls only what a task needs. The graph then rewrites itself from what the agent actually used.</p>
+
+  <div class="stats">
+    <div class="stat"><b id="s-tools">–</b><span>tools in the graph</span></div>
+    <div class="stat"><b id="s-pre">–</b><span>tokens if all preloaded</span></div>
+    <div class="stat"><b id="s-pull">–</b><span>tokens for this pull</span></div>
+    <div class="stat"><b id="s-red">–</b><span>fewer tokens than preloading</span></div>
+  </div>
+
+  <div class="card">
+    <h2>1. Give the agent a task</h2>
+    <div class="row"><input type="text" id="task" value="Email Acme a quick follow up about the renewal" aria-label="Task"><button class="primary" id="go">Pull context</button></div>
+    <div class="ex" id="examples"></div>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <h2>2. What the graph returned</h2>
+    <div class="grid">
+      <div>
+        <div class="muted" style="margin-bottom:6px">Skills</div><div id="r-skills"></div>
+        <div class="muted" style="margin:6px 0">Tools <span style="margin-left:8px"><span class="tag k-action">action</span><span class="tag k-dependency">dependency (NEEDS)</span><span class="tag k-resolver">resolver</span></span></div>
+        <div id="r-tools"></div>
+        <div class="muted" id="r-ents" style="margin-top:6px"></div>
+        <div class="muted" id="r-meta" style="margin-top:6px"></div>
+      </div>
+      <div><div class="muted" style="margin-bottom:6px">Path walked in HydraDB</div><div id="r-path"></div></div>
+    </div>
+  </div>
+
+  <div class="card" id="fb" hidden>
+    <h2>3. Tell the graph what the agent really needed</h2>
+    <div class="grid">
+      <div>
+        <div class="muted" style="margin-bottom:6px">Tick the tools the agent actually used. Add any it had to look up itself.</div>
+        <div id="fb-tools"></div>
+        <div class="row" style="margin-top:8px"><input type="text" id="fb-add" list="toollist" placeholder="missing tool, e.g. gmail.send_email"><button id="fb-addbtn">Add</button></div>
+        <datalist id="toollist"></datalist>
+        <div class="row" style="margin-top:10px;align-items:center"><span class="muted">Skill followed</span><select id="fb-skill"></select><button class="primary" id="fb-send">Send feedback</button></div>
+      </div>
+      <div id="fb-out" class="muted">Feedback reweights the edges that fired (hit/miss counters stored on the HydraDB edges), teaches the graph new trigger words when a needed tool was missed, and caches resolved entities.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Learning curve, live on this graph</h2>
+    <div class="row" style="margin-bottom:10px;flex-wrap:wrap">
+      <button class="primary" id="train1">Simulate 1 round of agent use</button><button id="train5">5 rounds</button><button id="reset">Reset graph</button>
+      <span class="muted" id="train-note" style="align-self:center"></span>
+    </div>
+    <svg id="chart" viewBox="0 0 640 220" width="100%" role="img" aria-label="Held-out task success and F1 by training round"></svg>
+    <div class="legend"><span style="--c:var(--accent)">Task success</span><span style="--c:var(--dep)">F1</span></div>
+    <p class="muted">Each round: 15 simulated tasks are pulled, scored, and fed back. The curve is scored on 60 held-out phrasings the graph never trained on.</p>
+  </div>
+
+  <div class="card">
+    <h2>Baselines, 5 seeds (offline run)</h2>
+    <img class="curve" src="/curve.png" alt="Learning curves for graph with learning, static graph, and flat table baselines">
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const post=(u,b)=>fetch(u,{method:'POST',body:JSON.stringify(b||{})}).then(r=>r.json());
+const EX=["Email Acme a quick follow up about the renewal","Drop Initech a note by mail about the new pricing","Refund the duplicate charge for Globex","The Checkout service is down, triage the incident","Ship the release and tell the team","Put a calendar invite on the books for Hooli"];
+let last=null, extra=new Set();
+EX.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{$('task').value=t;pull()};$('examples').appendChild(b)});
+const fmt=n=>n.toLocaleString();
+function tag(t){return `<span class="tag k-${t.kind}">${t.name}<i>${t.tokens}</i></span>`}
+function render(d){
+  last=d;$('result').hidden=false;$('fb').hidden=false;
+  $('s-pull').textContent=fmt(d.tokens);$('s-pre').textContent=fmt(d.preload_tokens);$('s-red').textContent=(d.reduction*100).toFixed(1)+'%';
+  $('r-skills').innerHTML=d.skills.length?d.skills.map(s=>`<span class="tag">${s}</span>`).join(''):'<span class="bad">No skill matched. The graph has not learned these words yet.</span>';
+  $('r-tools').innerHTML=d.tools.length?d.tools.map(tag).join(''):'<span class="muted">none</span>';
+  const eh=Object.keys(d.entities_hit),em=d.entities_missed;
+  $('r-ents').innerHTML=(eh.length?`Already resolved: <span class="good">${eh.join(', ')}</span>. `:'')+(em.length?`Not yet resolved: <span class="bad">${em.join(', ')}</span> (resolver tools included). `:'')+(d.pruned_resolvers.length?`Resolvers pruned: ${d.pruned_resolvers.join(', ')}.`:'');
+  $('r-meta').textContent=`${d.graph_queries} graph queries, 1 model round trip${em.length?` + ${2*em.length} to resolve entities`:''}. ${d.tool_tokens} tool tokens + ${d.skill_tokens} skill tokens.`;
+  $('r-path').innerHTML=d.path.length?d.path.map(e=>`<div class="edge"><b>${e.from}</b><u class="${e.rel}">${e.rel}</u><b>${e.to}</b></div>`).join(''):'<span class="muted">nothing to walk</span>';
+  extra=new Set();drawFb();
+  const sk=$('fb-skill');sk.value=d.skills[0]||'';
+}
+function drawFb(){
+  const pulled=last.tools.filter(t=>t.kind==='action').map(t=>t.name);
+  $('fb-tools').innerHTML=[...pulled,...[...extra].filter(x=>!pulled.includes(x))].map(n=>`<label class="chk"><input type="checkbox" data-n="${n}" ${extra.has(n)||true?'checked':''}> ${n}${extra.has(n)?' <span class="good">(added)</span>':''}</label>`).join('')||'<span class="muted">No tools were pulled. Add the ones the agent needed.</span>';
+}
+async function pull(){
+  $('go').disabled=true;try{render(await post('/api/pull',{task:$('task').value}))}finally{$('go').disabled=false}
+}
+$('go').onclick=pull;$('task').onkeydown=e=>{if(e.key==='Enter')pull()};
+$('fb-addbtn').onclick=()=>{const v=$('fb-add').value.trim();if(v){extra.add(v);$('fb-add').value='';drawFb()}};
+$('fb-send').onclick=async()=>{
+  const used=[...document.querySelectorAll('#fb-tools input:checked')].map(i=>i.dataset.n);
+  const r=await post('/api/feedback',{task:last.task,used,skill:$('fb-skill').value||null});
+  const a=r.after, names=a.tools.map(t=>t.name);
+  $('fb-out').innerHTML=`<div><b>Graph updated.</b> ${r.log.reweighted} edges reweighted, ${r.log.learned_kw} trigger words learned, ${r.log.recovered} edges recovered, ${r.log.entities} entities cached.</div><div style="margin-top:8px">Same task now pulls: ${a.tools.map(tag).join('')||'nothing yet'}</div>${(!a.tools.length&&r.log.learned_kw)?'<div class="muted" style="margin-top:6px">New trigger words start on probation so one-off noise cannot pollute the graph. Send the same feedback once more to activate them.</div>':''}`;
+  render(a);$('fb').hidden=false;load();
+};
+function chart(h){
+  const W=640,H=220,L=36,R=14,T=12,B=26;const n=Math.max(h.length-1,5);
+  const x=i=>L+(W-L-R)*i/n,y=v=>T+(H-T-B)*(1-v);
+  let s='';[0,.25,.5,.75,1].forEach(v=>{s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`});
+  for(let i=0;i<=n;i++)s+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle">${i}</text>`;
+  const line=(k,c)=>{const p=h.map((d,i)=>`${i?'L':'M'}${x(i)},${y(d[k])}`).join('');const e=h[h.length-1];
+    return `<path d="${p}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="${x(h.length-1)}" cy="${y(e[k])}" r="4.5" fill="${c}" stroke="var(--card)" stroke-width="2"/>`};
+  s+=line('f1','var(--dep)')+line('success','var(--accent)');
+  const e=h[h.length-1];s+=`<text x="${x(h.length-1)-6}" y="${y(e.success)-9}" text-anchor="end" style="fill:var(--ink)">${Math.round(e.success*100)}% success</text>`;
+  s+=`<text x="${W/2}" y="${H}" text-anchor="middle" style="display:none"></text>`;
+  $('chart').innerHTML=s;
+  $('train-note').textContent=`${e.trained_tasks} training tasks so far`;
+}
+async function load(){
+  const d=await fetch('/api/state').then(r=>r.json());
+  $('s-tools').textContent=fmt(d.catalog.tools);$('s-pre').textContent=fmt(d.catalog.preload_tokens);
+  $('toollist').innerHTML=d.tools.filter(t=>!t.startsWith('vendor')).map(t=>`<option value="${t}">`).join('');
+  $('fb-skill').innerHTML='<option value="">(infer from tools)</option>'+d.skills.map(s=>`<option>${s}</option>`).join('');
+  chart(d.history);
+}
+async function train(n){['train1','train5','reset'].forEach(i=>$(i).disabled=true);
+  try{const r=await post('/api/train',{rounds:n});chart(r.history)}finally{['train1','train5','reset'].forEach(i=>$(i).disabled=false)}}
+$('train1').onclick=()=>train(1);$('train5').onclick=()=>train(5);
+$('reset').onclick=async()=>{['train1','train5','reset'].forEach(i=>$(i).disabled=true);try{const r=await post('/api/reset');chart(r.history);$('result').hidden=true;$('fb').hidden=true}finally{['train1','train5','reset'].forEach(i=>$(i).disabled=false)}};
+load();pull();
+</script>
+</body>
+</html>

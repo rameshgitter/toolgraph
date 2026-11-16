@@ -1,0 +1,21 @@
+# Fly.io config. Build happens on Fly's remote builder (the Rust build is heavy), runtime needs little RAM.
+# Usage: fly launch --no-deploy --copy-config --name <your-app-name>   then   fly deploy --remote-only
+app = "toolgraph-demo"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"

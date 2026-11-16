@@ -1,0 +1,28 @@
+[
+ {
+  "catalog_tools": 261,
+  "preload_tokens": 28146,
+  "threads": 16,
+  "pulls": 2400,
+  "errors": 0,
+  "pulls_per_s": 397.8,
+  "queries_per_s": 2662,
+  "p50_ms": 37.7,
+  "p95_ms": 64.8,
+  "p99_ms": 76.9,
+  "pull_tokens_example": 1516
+ },
+ {
+  "catalog_tools": 2205,
+  "preload_tokens": 238098,
+  "threads": 16,
+  "pulls": 2400,
+  "errors": 0,
+  "pulls_per_s": 357.4,
+  "queries_per_s": 2392,
+  "p50_ms": 41.5,
+  "p95_ms": 72.0,
+  "p99_ms": 85.9,
+  "pull_tokens_example": 1516
+ }
+]

@@ -1,0 +1,4 @@
+.hydradb/
+__pycache__/
+*.log
+hydradb/
