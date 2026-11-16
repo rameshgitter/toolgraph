@@ -164,8 +164,11 @@ function chart(h){
   $('chart').innerHTML=s;
   $('train-note').textContent=`${e.trained_tasks} training tasks so far`;
 }
+let firstPull=false;
 async function load(){
   const d=await fetch('/api/state').then(r=>r.json());
+  if(d.error){$('train-note').textContent='Starting up: HydraDB is loading the graph, one moment...';setTimeout(load,3000);return}
+  if(!firstPull){firstPull=true;pull()}
   $('s-tools').textContent=fmt(d.catalog.tools);$('s-pre').textContent=fmt(d.catalog.preload_tokens);
   $('toollist').innerHTML=d.tools.filter(t=>!t.startsWith('vendor')).map(t=>`<option value="${t}">`).join('');
   $('fb-skill').innerHTML='<option value="">(infer from tools)</option>'+d.skills.map(s=>`<option>${s}</option>`).join('');
@@ -175,7 +178,7 @@ async function train(n){['train1','train5','reset'].forEach(i=>$(i).disabled=tru
   try{const r=await post('/api/train',{rounds:n});chart(r.history)}finally{['train1','train5','reset'].forEach(i=>$(i).disabled=false)}}
 $('train1').onclick=()=>train(1);$('train5').onclick=()=>train(5);
 $('reset').onclick=async()=>{['train1','train5','reset'].forEach(i=>$(i).disabled=true);try{const r=await post('/api/reset');chart(r.history);$('result').hidden=true;$('fb').hidden=true}finally{['train1','train5','reset'].forEach(i=>$(i).disabled=false)}};
-load();pull();
+load();
 </script>
 </body>
 </html>
